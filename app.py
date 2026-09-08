@@ -1,7 +1,7 @@
 import os
 import sqlite3
 import streamlit as st
-from openai import OpenAI
+from google import genai
 
 st.set_page_config(
     page_title="P-Card Audit Assistant",
@@ -12,10 +12,15 @@ st.set_page_config(
 st.title("💳 P-Card Audit Assistant")
 st.write("Ask questions about purchasing-card transactions using natural language.")
 
-# OpenAI client
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# Gemini client
+api_key = os.environ.get("GEMINI_API_KEY")
 
-# Database connection
+if not api_key:
+    st.error("Gemini API key is not configured.")
+    st.stop()
+
+client = genai.Client(api_key=api_key)
+
 DB_PATH = "pcards.db"
 
 
@@ -30,7 +35,6 @@ def get_database_schema():
     """)
 
     tables = cursor.fetchall()
-
     schema = ""
 
     for table in tables:
@@ -89,12 +93,12 @@ Rules:
 - Only use SELECT queries.
 """
 
-    response = client.responses.create(
-        model="gpt-5-mini",
-        input=prompt
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
     )
 
-    return response.output_text.strip()
+    return response.text.strip()
 
 
 def explain_result(question, columns, rows):
@@ -117,20 +121,18 @@ If there are multiple results, summarize them in an easy-to-read way.
 Do not invent information.
 """
 
-    response = client.responses.create(
-        model="gpt-5-mini",
-        input=prompt
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
     )
 
-    return response.output_text.strip()
+    return response.text.strip()
 
 
-# Check database
 if not os.path.exists(DB_PATH):
 
     st.error(
-        "The database file pcards.db was not found. "
-        "Please upload/add pcards.db to the project."
+        "The database file pcards.db was not found."
     )
 
 else:
@@ -155,7 +157,6 @@ else:
 
                     sql_query = generate_sql(question, schema)
 
-                    # Security check
                     if not sql_query.lower().strip().startswith("select"):
                         st.error("Only SELECT queries are allowed.")
                         st.stop()
@@ -185,14 +186,10 @@ else:
                         )
 
                         with st.expander("View SQL query"):
-
                             st.code(
                                 sql_query,
                                 language="sql"
                             )
 
                 except Exception as e:
-
-                    st.error(
-                        f"Something went wrong: {e}"
-                    )
+                    st.error(f"Something went wrong: {e}")
